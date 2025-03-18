@@ -81,7 +81,7 @@ def buttonlong():
 # Screen to display on OLED during heating
 
 
-def displaynum(mode, minutes, seconds, timer, value):
+def displaynum(course, minutes, seconds, timer, value):
     # This needs to be fast for nice responsive increments
     # 100 increments?
     ssd.fill(0)
@@ -95,7 +95,7 @@ def displaynum(mode, minutes, seconds, timer, value):
     CWriter.set_textpos(ssd, 0, 0)
     wrimem = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
         155, 155, 155), bgcolor=0)
-    wrimem.printstring('Mode: '+ mode)
+    wrimem.printstring(course)
 
     CWriter.set_textpos(ssd, 22, 0)
     wrimem.printstring('Time Til Start:')
@@ -213,17 +213,13 @@ async def main():
     # The Tweakable values that will help tune for our use case. TODO: Make accessible via menu on OLED
     checkin = 5
     started = False
+    course = ""
     # Setup Level Encoder
     level = Encoder(2,3,4,-30,30)
     
     short_press = level.pb.release_func(button, ())
     long_press = level.pb.long_func(buttonlong, ())
-    
-    # define buttons
-    down = Pin(0, Pin.IN, Pin.PULL_DOWN)
-    up = Pin(1, Pin.IN, Pin.PULL_DOWN)
-    reset = Pin(5, Pin.IN, Pin.PULL_DOWN)
-    
+        
     #local variables
     pin = 0
     ##integral = 0
@@ -248,7 +244,7 @@ async def main():
     matrix_keys = [['1', '2', '3', 'A'],
                ['4', '5', '6', 'B'],
                ['7', '8', '9', 'C'],
-               ['*', '0', '#', 'D']]
+               ['*', 'G', '#', 'D']]
 
     # PINs according to schematic - Change the pins to match with your connections
     keypad_rows = [15,14,13,12]
@@ -276,23 +272,7 @@ async def main():
                 displaytime = "%01d:%02d" % (m,s)
             #print(displaytime)
             try:
-                if started == True and m <= 0 and s <=0:
-                    started = False
-                    displaytime = "Started"
-                if down.value() == 1:
-                    level.down()
-                if up.value() == 1:
-                    level.up()
-                if reset.value() == 1:
-                    level.reset()
-                    start = utime.time()
-                    started = True
-                displaynum("RACE", m, s, displaytime, level.counter)
-                now = utime.time()
-                dt = now-lastupdate
-                if dt > checkin:
-                    utime.sleep(.1)
-                    lastupdate = now
+                keypress = ""
                 # Scan Keys
                 for row in range(4):
                     for col in range(4):
@@ -300,11 +280,35 @@ async def main():
                         key = None
                         
                         if col_pins[col].value() == 1:
-                            print("You have pressed:", matrix_keys[row][col])
+                            keypress = matrix_keys[row][col]
+                            print("You have pressed:", keypress)
                             key_press = matrix_keys[row][col]
                             utime.sleep(0.3)
                                 
                     row_pins[row].low()
+                if  keypress == "*":
+                    course = ""
+                elif  keypress == "A":
+                    level.up()
+                elif  keypress == "B":
+                    level.down()
+                elif  keypress == "#":
+                    level.reset()
+                    start = utime.time()
+                    started = True
+                    m=5
+                    s=0
+                else:
+                    course += keypress
+                if started == True and m <= 0 and s <=0:
+                    started = False
+                    displaytime = "Race"
+                displaynum(course, m, s, displaytime, level.counter)
+                now = utime.time()
+                dt = now-lastupdate
+                if dt > checkin:
+                    utime.sleep(.1)
+                    lastupdate = now
             except Exception as e:
                 # Put something to output to OLED screen
                 beanaproblem('error.')
