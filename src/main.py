@@ -17,6 +17,7 @@ import sys
 import math
 import gc
 from drivers.ssd1351.ssd1351_16bit import SSD1351 as SSD
+from drivers import DHT11, InvalidChecksum
 import uasyncio as asyncio
 from primitives.pushbutton import Pushbutton
 
@@ -227,9 +228,10 @@ async def main():
     refresh(ssd, True)  # Initialise and clear display.
     # Load levels for file
     data = str.split(load(), ',')
-    
-    data = str.split(load(), ',')
     print(data)
+
+    # Set Humidity and Temperature pin
+    pin = Pin(28, Pin.OUT, Pin.PULL_DOWN)
     
     start_time = 300
     m=5
@@ -270,7 +272,13 @@ async def main():
                 m,s = divmod(now,60)
                 h,m = divmod(m,60)
                 displaytime = "%01d:%02d" % (m,s)
-            #print(displaytime)
+            
+                sensor = DHT11(pin)
+                t  = (sensor.temperature)
+                h = (sensor.humidity)
+                print("Temperature: {}".format(sensor.temperature))
+                print("Humidity: {}".format(sensor.humidity))
+                #print(displaytime)
             try:
                 keypress = ""
                 # Scan Keys
