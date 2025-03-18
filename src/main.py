@@ -7,6 +7,7 @@
 # Fonts for Writer (generated using https://github.com/peterhinch/micropython-font-to-py)
 import gui.fonts.freesans20 as freesans20
 import gui.fonts.quantico40 as quantico40
+import gui.fonts.arial35 as arial35
 from gui.core.writer import CWriter
 from gui.core.nanogui import refresh
 import utime
@@ -80,30 +81,32 @@ def buttonlong():
 # Screen to display on OLED during heating
 
 
-def displaynum(channel, num, value):
+def displaynum(mode, minutes, seconds, timer, value):
     # This needs to be fast for nice responsive increments
     # 100 increments?
     ssd.fill(0)
-    delta = num-value
     text = SSD.rgb(0, 255, 0)
-    if delta >= .5:
+    if minutes <= 1:
         text = SSD.rgb(165, 42, 42)
-    if delta <= -.5:
+    if minutes <= 2:
         text = SSD.rgb(0, 255, 255)
-    wri = CWriter(ssd, quantico40, fgcolor=text, bgcolor=0, verbose=False)
+    wri = CWriter(ssd, arial35, fgcolor=text, bgcolor=0, verbose=False)
     # verbose = False to suppress console output
-    CWriter.set_textpos(ssd, 50, 0)
-    wri.printstring(str("{:.0f}".format(num)))
-    wrimem = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
-        255, 255, 255), bgcolor=0, verbose=False)
-    CWriter.set_textpos(ssd, 100, 0)
-    wrimem.printstring('now at: '+str("{:.0f}".format(value))+"/ 10")
     CWriter.set_textpos(ssd, 0, 0)
     wrimem = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
         155, 155, 155), bgcolor=0)
-    wrimem.printstring('Channel: '+str("{:.0f}".format(channel)))
-    CWriter.set_textpos(ssd, 20, 0)
-    wrimem.printstring('Target:')
+    wrimem.printstring('Mode: '+ mode)
+
+    CWriter.set_textpos(ssd, 22, 0)
+    wrimem.printstring('Time Til Start:')
+
+
+    CWriter.set_textpos(ssd, 60, 0)
+    wri.printstring(timer)
+    wrimem = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
+        255, 255, 255), bgcolor=0, verbose=False)
+    CWriter.set_textpos(ssd, 65, 85)
+    wrimem.printstring(str("{:.0f}".format(value)))
     ssd.show()
     return
 
@@ -137,7 +140,7 @@ gc.collect()  # Precaution before instantiating framebuf
 
 ssd = SSD(spi, pcs, pdc, prst, height)  # Create a display instance
 
-splash("WaterIt")
+splash("Sail IT")
 
 # Define relay and LED pins
 
@@ -168,6 +171,12 @@ class Encoder:
         # attach interrupt to the outB pin ( DT pin of encoder module )
         self.outB.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING,
                  handler=self.encoder)
+    def down(cls):
+        cls.counter -= .5
+    def up(cls):
+        cls.counter += .5
+    def reset(cls):
+        cls.counter = 0
     def encoder(cls, pin):
         # read the value of current state of outA pin / CLK pin
         try:
@@ -183,9 +192,9 @@ class Encoder:
             # if DT value is not equal to CLK value
             # rotation is clockwise [or Counterclockwise ---> sensor dependent]
             if cls.outB.value() != cls.outA_current:
-                cls.counter += .5
+                cls.counter += 1
             else:
-                cls.counter -= .5
+                cls.counter -= 1
 
             # print the data on screen
             print("Class Counter : ", cls.counter, "     |   Direction : ",cls.direction)
@@ -197,75 +206,23 @@ class Encoder:
         cls.counter = max(cls.min, cls.counter)
         return(cls.counter)
 
-class Channel:
-    def __init__(self, sensor, relay, calibratewet, calibratedry, startlevel):
-        self.sensor = sensor
-        self.relay = relay
-        self.calibratewet = calibratewet
-        self.calibratedry = calibratedry
-        self.wetness = ADC(self.sensor)
-        self.integral = 0
-        self.derivative = 0
-        self.error = 0
-        self.lasterror = 0
-        # In terms of steering a sailboat:
-        # Kp is steering harder the further off course you are,
-        # Ki is steering into the wind to counteract a drift
-        # Kd is slowing the turn as you approach your course
-        # Proportional term - Basic steering (This is the first parameter you should tune for a particular setup)
-        self.Kp = 2
-        self.Ki = 0   # Integral term - Compensate for heat loss by vessel
-        self.Kd = 0  # Derivative term - to prevent overshoot due to inertia - if it is zooming towards setpoint this
-        # will cancel out the proportional term due to the large negative gradient
-        self.output = 0
-        self.offstate = True
-        self.level = int(startlevel)
-        relaypin = Pin(self.relay, mode=Pin.OUT, value=1)
-    def read(cls):
-        # Get wetness
-        cls.imwet = cls.wetness.read_u16()
-        cls.howdry = min(10, max(0, 10*(cls.imwet-cls.calibratedry) / 
-                             (cls.calibratewet-cls.calibratedry)))
-        #print("raw:"+str(cls.imwet)+" normalized:"+str(cls.howdry))
-        return cls.howdry
-    def pid(cls, dt):
-        cls.error = cls.level-cls.howdry
-        cls.integral = cls.integral + dt * cls.error
-        cls.derivative = (cls.error - cls.lasterror)/dt
-        cls.output = cls.Kp * cls.error + cls.Ki * cls.integral + cls.Kd * cls.derivative
-        print(str(cls.output)+"= Kp term: "+str(cls.Kp*cls.error)+" + Ki term:" +
-              str(cls.Ki*cls.integral) + "+ Kd term: " + str(cls.Kd*cls.derivative))
-        # Clamp output between 0 and 100
-        cls.output = max(min(100, cls.output), 0)
-        #print(cls.output)
-        if cls.output > 0:
-            print('ON')
-            relaypin = Pin(cls.relay, mode=Pin.OUT, value=0)
-            cls.offstate = False
-        else:
-            print('OFF')
-            relaypin = Pin(cls.relay, mode=Pin.OUT, value=1)
-            cls.offstate = True
-        cls.lasterror = cls.error
-        
-
 
 # Main Logic
 
 async def main():
     # The Tweakable values that will help tune for our use case. TODO: Make accessible via menu on OLED
-    calibratewet = 20000  # ADC value for a very wet thing
-    calibratedry = 50000  # ADC value for a very dry thing
     checkin = 5
-
+    started = False
     # Setup Level Encoder
-    level = Encoder(2,3,4,0,9)
-    
-    #Setup Chsnnrl Selector
-    selector = Encoder(6,7,8,1,3)
+    level = Encoder(2,3,4,-30,30)
     
     short_press = level.pb.release_func(button, ())
     long_press = level.pb.long_func(buttonlong, ())
+    
+    # define buttons
+    down = Pin(0, Pin.IN, Pin.PULL_DOWN)
+    up = Pin(1, Pin.IN, Pin.PULL_DOWN)
+    reset = Pin(5, Pin.IN, Pin.PULL_DOWN)
     
     #local variables
     pin = 0
@@ -275,40 +232,42 @@ async def main():
     # Load levels for file
     data = str.split(load(), ',')
     
-    channel = []
-    channel.append(Channel(26, 15, calibratewet, calibratedry, data[0]))
-    channel.append(Channel(27, 14, calibratewet, calibratedry, data[1]))
-    channel.append(Channel(28, 13, calibratewet, calibratedry, data[2]))
-    #channel.append(Channel(22, 12, calibratewet, calibratedry))
     data = str.split(load(), ',')
     print(data)
-    channel[0].read()
-    channel[1].read()
-    channel[2].read()
-    #channel[3].read()
-    lastchannel = -1
     
+    start_time = 300
+    m=5
+    s=0
+    displaytime=""
+    start = utime.time()
+    refresh(ssd, True)
     # PID loop - Default behaviour
     powerup = True
     while True:
         if powerup:
+            if started == True:
+                now = start_time - (utime.time()-start) + level.counter
+                # Calculate hour min seconds
+                m,s = divmod(now,60)
+                h,m = divmod(m,60)
+                displaytime = "%01d:%02d" % (m,s)
+            #print(displaytime)
             try:
-                counter = level.encoder(0)
-                currentchannel = int(selector.encoder(0))
-                if lastchannel != currentchannel:
-                    lastchannel = currentchannel
-                    counter = channel[currentchannel - 1].level
-                    level.counter = counter
-                if channel[currentchannel - 1].level != counter:
-                    channel[currentchannel - 1].level = counter
-                    save(channel[0].level, channel[1].level, channel[2].level, 0)
-                # Get wetness
-                channel[0].read()
-                displaynum(currentchannel, counter, float(channel[currentchannel - 1].howdry))
+                if started == True and m <= 0 and s <=0:
+                    started = False
+                    displaytime = "Started"
+                if down.value() == 1:
+                    level.down()
+                if up.value() == 1:
+                    level.up()
+                if reset.value() == 1:
+                    level.reset()
+                    start = utime.time()
+                    started = True
+                displaynum("RACE", m, s, displaytime, level.counter)
                 now = utime.time()
                 dt = now-lastupdate
                 if dt > checkin:
-                    channel[0].pid(dt)
                     utime.sleep(.1)
                     lastupdate = now
 
