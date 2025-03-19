@@ -21,7 +21,7 @@ from drivers.ssd1351.ssd1351_16bit import SSD1351 as SSD
 import uasyncio as asyncio
 from primitives.pushbutton import Pushbutton
 from drivers import MPU6050
-from drivers.ir_rx.nec import NEC_16  # NEC remote, 16 bit addresses
+from ir_rx.nec import NEC_16  # NEC remote, 16 bit addresses
 
 def save(level1, level2, level3, level4):
     file = open("level.csv", "w")
@@ -143,10 +143,10 @@ ledPin = Pin(25, mode=Pin.OUT, value=1)
 def callback(data, addr, ctrl):
     # Validate whether the data can be processed
     if data < 0:  
-        print('')
+        print(hex(addr))
     else:
         # Output received data
-        print("Received: \t Address:", hex(addr), "\tData:", hex(data))
+        print("Received: \t Address:", hex(addr), "\tData:", data)
 
 # Class for managing Encoder
 
@@ -287,9 +287,9 @@ async def main():
             #gyro = mpu.read_gyro_data()
             accel = mpu.read_accel_data()
             #print("Gyro: " + str(gyro) + ", Accel: " + str(accel))
-            print (mpu.accel_z)
+            #print (mpu.accel_z)
             
-            print(mpu.tilt, mpu.roll, mpu.pitch)
+            #print(mpu.tilt, mpu.roll, mpu.pitch)
 
             try:
 
@@ -324,7 +324,7 @@ async def main():
                 if started == True and m <= 0 and s <=0:
                     started = False
                     displaytime = "Race"
-                displaynum(course, m, s, displaytime, level.counter, mpu.tilt)
+                displaynum(course, m, s, displaytime, level.counter, mpu.roll)
                 now = utime.time()
                 dt = now-lastupdate
                 if dt > checkin:
