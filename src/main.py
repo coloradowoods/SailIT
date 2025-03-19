@@ -20,7 +20,7 @@ from drivers.ssd1351.ssd1351_16bit import SSD1351 as SSD
 from drivers import DHT11, InvalidChecksum
 import uasyncio as asyncio
 from primitives.pushbutton import Pushbutton
-
+from drivers import MPU6050
 
 def save(level1, level2, level3, level4):
     file = open("level.csv", "w")
@@ -217,28 +217,19 @@ async def main():
     course = ""
     # Setup Level Encoder
     level = Encoder(2,3,4,-30,30)
-    
     short_press = level.pb.release_func(button, ())
     long_press = level.pb.long_func(buttonlong, ())
         
     #local variables
     pin = 0
-    ##integral = 0
     lastupdate = utime.time()
     refresh(ssd, True)  # Initialise and clear display.
-    # Load levels for file
-    data = str.split(load(), ',')
-    print(data)
-
-    # Set Humidity and Temperature pin
-    pin = Pin(28, Pin.OUT, Pin.PULL_DOWN)
-    
     start_time = 300
     m=5
     s=0
     displaytime=""
     start = utime.time()
-    refresh(ssd, True)
+ 
     # PID loop - Default behaviour
     powerup = True
 
@@ -247,21 +238,26 @@ async def main():
                ['4', '5', '6', 'B'],
                ['7', '8', '9', 'C'],
                ['*', 'G', '#', 'D']]
-
     # PINs according to schematic - Change the pins to match with your connections
     keypad_rows = [15,14,13,12]
     keypad_columns = [11,10,9,8]
-
     # Create two empty lists to set up pins ( Rows output and columns input )
     col_pins = []
     row_pins = []
-
     # Loop to assign GPIO pins and setup input and outputs
     for x in range(0,4):
         row_pins.append(Pin(keypad_rows[x], Pin.OUT))
         row_pins[x].value(1)
         col_pins.append(Pin(keypad_columns[x], Pin.IN, Pin.PULL_DOWN))
         col_pins[x].value(0)
+    
+    # Setup the Gyro
+    # Set up the I2C interface
+    i2c = machine.I2C(1, sda=machine.Pin(6), scl=machine.Pin(7))
+    # Set up the MPU6050 class 
+    mpu = MPU6050.MPU6050(i2c)
+    # wake up the MPU6050 from sleep
+    mpu.wake()
 
 
     while True:
@@ -272,14 +268,11 @@ async def main():
                 m,s = divmod(now,60)
                 h,m = divmod(m,60)
                 displaytime = "%01d:%02d" % (m,s)
-            
-                sensor = DHT11(pin)
-                t  = (sensor.temperature)
-                h = (sensor.humidity)
-                print("Temperature: {}".format(sensor.temperature))
-                print("Humidity: {}".format(sensor.humidity))
-                #print(displaytime)
             try:
+                gyro = mpu.read_gyro_data()
+                accel = mpu.read_accel_data()
+                print("Gyro: " + str(gyro) + ", Accel: " + str(accel))
+
                 keypress = ""
                 # Scan Keys
                 for row in range(4):
