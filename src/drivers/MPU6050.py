@@ -12,6 +12,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 """
 
 import machine
+import math
 
 class MPU6050:
     """Class for reading gyro rates and acceleration data from an MPU-6050 module via I2C."""
@@ -24,7 +25,12 @@ class MPU6050:
         """
         self.address = address
         self.i2c = i2c
-        
+        self.accel_x = 0
+        self.accel_y = 0
+        self.accel_z = 0
+        self.tilt = 0
+        self.roll = 0
+        self.pitch = 0
     def wake(self) -> None:
         """Wake up the MPU-6050."""
         self.i2c.writeto_mem(self.address, 0x6B, bytes([0x01]))
@@ -73,6 +79,7 @@ class MPU6050:
         y:float = (self._translate_pair(data[2], data[3])) / modifier
         z:float = (self._translate_pair(data[4], data[5])) / modifier
         
+        
         return (x, y, z)
                 
     def read_accel_range(self) -> int:
@@ -103,7 +110,23 @@ class MPU6050:
         x:float = (self._translate_pair(data[0], data[1])) / modifier
         y:float = (self._translate_pair(data[2], data[3])) / modifier
         z:float = (self._translate_pair(data[4], data[5])) / modifier
-        
+
+        x1 = x
+        y1 = y
+        z1 = z
+        if x > 1:
+            x1 = 1
+        if y > 1:
+            y1 = 1
+        if z > 1:
+            z1 = 1
+        self.accel_x = x1
+        self.accel_y = y1
+        self.accel_z = z1
+        self.tilt = math.acos(z1)/2/math.pi*360
+        self.roll = math.atan(x1/z1)/2/math.pi*360
+        self.pitch = math.atan(y1/z1)/2/math.pi*360
+
         return (x, y, z)
         
     def read_lpf_range(self) -> int:

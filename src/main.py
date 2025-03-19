@@ -11,6 +11,7 @@ import gui.fonts.arial35 as arial35
 from gui.core.writer import CWriter
 from gui.core.nanogui import refresh
 import utime
+import math
 from machine import Pin, I2C, SPI, ADC, reset
 #from rp2 import PIO, StateMachine, asm_pio
 import sys
@@ -81,7 +82,7 @@ def buttonlong():
 # Screen to display on OLED during heating
 
 
-def displaynum(course, minutes, seconds, timer, value):
+def displaynum(course, minutes, seconds, timer, value, angle):
     # This needs to be fast for nice responsive increments
     # 100 increments?
     ssd.fill(0)
@@ -98,7 +99,7 @@ def displaynum(course, minutes, seconds, timer, value):
     wrimem.printstring(course)
 
     CWriter.set_textpos(ssd, 22, 0)
-    wrimem.printstring('Time Til Start:')
+    wrimem.printstring(str("{:.0f}".format(angle)))
 
 
     CWriter.set_textpos(ssd, 60, 0)
@@ -224,14 +225,6 @@ async def main():
     lastupdate = utime.time()
     lasttempupdate = utime.time()
     refresh(ssd, True)  # Initialise and clear display.
-<<<<<<< HEAD
-    # Load levels for file
-    data = str.split(load(), ',')
-    print(data)
-
-    
-=======
->>>>>>> origin/main
     start_time = 300
     m=5
     s=0
@@ -277,15 +270,15 @@ async def main():
                 m,s = divmod(now,60)
                 h,m = divmod(m,60)
                 displaytime = "%01d:%02d" % (m,s)
-<<<<<<< HEAD
-                
-                #print(displaytime)
-=======
->>>>>>> origin/main
+
+            #gyro = mpu.read_gyro_data()
+            accel = mpu.read_accel_data()
+            #print("Gyro: " + str(gyro) + ", Accel: " + str(accel))
+            print (mpu.accel_z)
+            
+            print(mpu.tilt, mpu.roll, mpu.pitch)
+
             try:
-                gyro = mpu.read_gyro_data()
-                accel = mpu.read_accel_data()
-                print("Gyro: " + str(gyro) + ", Accel: " + str(accel))
 
                 keypress = ""
                 # Scan Keys
@@ -318,7 +311,7 @@ async def main():
                 if started == True and m <= 0 and s <=0:
                     started = False
                     displaytime = "Race"
-                displaynum(course, m, s, displaytime, level.counter)
+                displaynum(course, m, s, displaytime, level.counter, mpu.tilt)
                 now = utime.time()
                 dt = now-lastupdate
                 if dt > checkin:
