@@ -21,6 +21,7 @@ from drivers.ssd1351.ssd1351_16bit import SSD1351 as SSD
 import uasyncio as asyncio
 from primitives.pushbutton import Pushbutton
 from drivers import MPU6050
+from drivers.ir_rx.nec import NEC_16  # NEC remote, 16 bit addresses
 
 def save(level1, level2, level3, level4):
     file = open("level.csv", "w")
@@ -32,52 +33,42 @@ def load():
     file.close()
     return data
 
-def splash(string):
+def splash(product, company):
     wri = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
         50, 50, 0), bgcolor=0, verbose=False)
     CWriter.set_textpos(ssd, 90, 25)
-    wri.printstring('InnoGraft')
+    wri.printstring(company)
     ssd.show()
     utime.sleep(.3)
     for x in range(10):
         wri = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
             25*x, 25*x, 25*x), bgcolor=0, verbose=False)
         CWriter.set_textpos(ssd, 55, 25)
-        wri.printstring(string)
+        wri.printstring(product)
         wri = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
             50-x, 50-x, 0), bgcolor=0, verbose=False)
         CWriter.set_textpos(ssd, 90, 25)
-        wri.printstring('InnoGraft')
+        wri.printstring(company)
         ssd.show()
     utime.sleep(2)
     for x in range(10, 0, -1):
         wri = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
             25*x, 25*x, 25*x), bgcolor=0, verbose=False)
         CWriter.set_textpos(ssd, 55, 25)
-        wri.printstring(string)
+        wri.printstring(product)
         wri = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
             50-x, 50-x, 0), bgcolor=0, verbose=False)
         CWriter.set_textpos(ssd, 90, 25)
-        wri.printstring('InnoGraft')
+        wri.printstring(company)
         ssd.show()
     wri = CWriter(ssd, freesans20, fgcolor=SSD.rgb(
         50, 50, 0), bgcolor=0, verbose=False)
     CWriter.set_textpos(ssd, 90, 25)
-    wri.printstring('InnoGraft')
+    wri.printstring(company)
     ssd.show()
     utime.sleep(.3)
     return
-# function for short button press - currently just a placeholder
-def button():
-    print('Button short press: Boop')
-    return
 
-# function for long button press - currently just a placeholder
-
-
-def buttonlong():
-    print('Button long press: Reset')
-    return
 
 # Screen to display on OLED during heating
 
@@ -141,13 +132,23 @@ gc.collect()  # Precaution before instantiating framebuf
 
 ssd = SSD(spi, pcs, pdc, prst, height)  # Create a display instance
 
-splash("Sail IT")
+splash("Sail IT", "Innograft")
 
 # Define relay and LED pins
 
 # Onboard led on GPIO 25, not currently used, but who doesnt love a controllable led?
-ledPin = Pin(25, mode=Pin.OUT, value=0)
+ledPin = Pin(25, mode=Pin.OUT, value=1)
 
+# Method to process received data
+def callback(data, addr, ctrl):
+    # Validate whether the data can be processed
+    if data < 0:  
+        print('')
+    else:
+        # Output received data
+        print("Received: \t Address:", hex(addr), "\tData:", hex(data))
+
+# Class for managing Encoder
 
 class Encoder:
     def __init__(self, clk, dt, sw, min, max):
@@ -207,6 +208,17 @@ class Encoder:
         cls.counter = max(cls.min, cls.counter)
         return(cls.counter)
 
+# function for short button press - currently just a placeholder
+def button():
+    print('Button short press: Boop')
+    return
+
+# function for long button press - currently just a placeholder
+
+
+def buttonlong():
+    print('Button long press: Reset')
+    return
 
 # Main Logic
 
@@ -221,7 +233,6 @@ async def main():
     long_press = level.pb.long_func(buttonlong, ())
         
     #local variables
-    pin = 0
     lastupdate = utime.time()
     lasttempupdate = utime.time()
     refresh(ssd, True)  # Initialise and clear display.
@@ -260,6 +271,8 @@ async def main():
     # wake up the MPU6050 from sleep
     mpu.wake()
 
+    # define IR Receiver
+    ir = NEC_16(Pin(5, Pin.IN), callback)
 
     while True:
         if powerup:
