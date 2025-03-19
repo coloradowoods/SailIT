@@ -22,6 +22,7 @@ import uasyncio as asyncio
 from primitives.pushbutton import Pushbutton
 from drivers import MPU6050
 from ir_rx.nec import NEC_16  # NEC remote, 16 bit addresses
+import max7219
 
 def save(level1, level2, level3, level4):
     file = open("level.csv", "w")
@@ -274,6 +275,20 @@ async def main():
     # define IR Receiver
     ir = NEC_16(Pin(5, Pin.IN), callback)
 
+    #Intialize the SPI
+    matrix_spi = SPI(0, baudrate=10000000, polarity=1, phase=0, sck=Pin(1), mosi=Pin(2))
+    matrix_ss = Pin(21, Pin.OUT)
+    # Create matrix display instant, which has four MAX7219 devices.
+    matrix = max7219.Matrix8x8(matrix_spi, matrix_ss, 4)
+    #Set the display brightness. Value is 1 to 15.
+    matrix.brightness(10)
+    matrix_message = "RASPBERRY PI PICO AND MAX7219 -- 8x8 DOT MATRIX SCROLLING DISPLAY"
+    matrix_message_length = len(message)
+    #Calculate number of columns of the message
+    matrix_column = (matrix_message_length * 8)
+    #Clear the display.
+    matrix.fill(0)
+    matrix.show()
     while True:
         if powerup:
 
@@ -284,14 +299,20 @@ async def main():
                 h,m = divmod(m,60)
                 displaytime = "%01d:%02d" % (m,s)
 
-            #gyro = mpu.read_gyro_data()
-            accel = mpu.read_accel_data()
-            #print("Gyro: " + str(gyro) + ", Accel: " + str(accel))
-            #print (mpu.accel_z)
-            
-            #print(mpu.tilt, mpu.roll, mpu.pitch)
+
+            for x in range(32, -column, -1):     
+                #Clear the display
+                matrix.fill(0)
+                # Write the scrolling text in to frame buffer
+                matrix.text(scrolling_message ,x,0,1)
+                #Show the display
+                matrix.show()
+                #Set the Scrolling speed. Here it is 50mS.
+                utime.sleep(0.05)
 
             try:
+                #gyro = mpu.read_gyro_data()
+                accel = mpu.read_accel_data()
 
                 keypress = ""
                 # Scan Keys
