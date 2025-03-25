@@ -91,7 +91,7 @@ def displaynum(course, minutes, seconds, timer, value, angle):
     wrimem.printstring(course)
 
     CWriter.set_textpos(ssd, 22, 0)
-    wrimem.printstring(str("{:.0f}".format(angle)))
+    wrimem.printstring("roll: " + str("{:.0f}".format(angle)))
 
 
     CWriter.set_textpos(ssd, 60, 0)
@@ -139,16 +139,44 @@ splash("Sail IT", "Innograft")
 
 # Onboard led on GPIO 25, not currently used, but who doesnt love a controllable led?
 ledPin = Pin(25, mode=Pin.OUT, value=1)
-
+remotekey = ""
+course = ""
 # Method to process received data
 def callback(data, addr, ctrl):
+    global remotekey
+    global course
     # Validate whether the data can be processed
     if data < 0:  
         print(hex(addr))
     else:
         # Output received data
         print("Received: \t Address:", hex(addr), "\tData:", data)
-
+        if data == 2:
+            remotekey = "reset"
+        elif data == 96 or data == 7 or data == 96:
+            remotekey = "up"
+        elif data == 97 or data == 11 or data == 16:
+            remotekey = "down"
+        elif data == 4:
+            course += "1"
+        elif data == 5:
+            course += "2"
+        elif data == 6:
+            course += "3"
+        elif data == 8:
+            course += "4"
+        elif data == 9:
+            course += "5"
+        elif data == 10:
+            course += "6"
+        elif data == 12:
+            course += "7"
+        elif data == 13:
+            course += "8"
+        elif data == 17:
+            course += "G"
+        elif data == 45:
+            course = ""
 # Class for managing Encoder
 
 class Encoder:
@@ -224,12 +252,14 @@ def buttonlong():
 # Main Logic
 
 async def main():
+    global remotekey
+    global course
     # The Tweakable values that will help tune for our use case. TODO: Make accessible via menu on OLED
     checkin = 5
     started = False
     course = ""
     # Setup Level Encoder
-    level = Encoder(2,3,4,-30,30)
+    level = Encoder(22,26,27,-30,30)
     short_press = level.pb.release_func(button, ())
     long_press = level.pb.long_func(buttonlong, ())
         
@@ -266,7 +296,7 @@ async def main():
     
     # Setup the Gyro
     # Set up the I2C interface
-    i2c = machine.I2C(1, sda=machine.Pin(6), scl=machine.Pin(7))
+    i2c = machine.I2C(1, sda=machine.Pin(2), scl=machine.Pin(3))
     # Set up the MPU6050 class 
     mpu = MPU6050.MPU6050(i2c)
     # wake up the MPU6050 from sleep
@@ -276,19 +306,20 @@ async def main():
     ir = NEC_16(Pin(5, Pin.IN), callback)
 
     #Intialize the SPI
-    matrix_spi = SPI(0, baudrate=10000000, polarity=1, phase=0, sck=Pin(1), mosi=Pin(2))
-    matrix_ss = Pin(21, Pin.OUT)
-    # Create matrix display instant, which has four MAX7219 devices.
-    matrix = max7219.Matrix8x8(matrix_spi, matrix_ss, 4)
-    #Set the display brightness. Value is 1 to 15.
-    matrix.brightness(10)
-    matrix_message = "RASPBERRY PI PICO AND MAX7219 -- 8x8 DOT MATRIX SCROLLING DISPLAY"
-    matrix_message_length = len(message)
-    #Calculate number of columns of the message
-    matrix_column = (matrix_message_length * 8)
-    #Clear the display.
-    matrix.fill(0)
-    matrix.show()
+    #matrix_spi = SPI(1, baudrate=10000000, polarity=1, phase=0, sck=Pin(18), mosi=Pin(7))
+    if 0 ==1 :
+        matrix_ss = Pin(21, Pin.OUT)
+        # Create matrix display instant, which has four MAX7219 devices.
+        matrix = max7219.Matrix8x8(matrix_spi, matrix_ss, 4)
+        #Set the display brightness. Value is 1 to 15.
+        matrix.brightness(10)
+        matrix_message = "RASPBERRY PI PICO AND MAX7219 -- 8x8 DOT MATRIX SCROLLING DISPLAY"
+        matrix_message_length = len(matrix_message)
+        #Calculate number of columns of the message
+        matrix_column = (matrix_message_length * 8)
+        #Clear the display.
+        matrix.fill(1)
+        matrix.show()
     while True:
         if powerup:
 
@@ -299,20 +330,21 @@ async def main():
                 h,m = divmod(m,60)
                 displaytime = "%01d:%02d" % (m,s)
 
-
-            for x in range(32, -column, -1):     
-                #Clear the display
-                matrix.fill(0)
-                # Write the scrolling text in to frame buffer
-                matrix.text(scrolling_message ,x,0,1)
-                #Show the display
-                matrix.show()
-                #Set the Scrolling speed. Here it is 50mS.
-                utime.sleep(0.05)
+            if 1 == 0:
+                for x in range(32, -matrix_column, -1):     
+                    #Clear the display
+                    matrix.fill(1)
+                    # Write the scrolling text in to frame buffer
+                    matrix.text(matrix_message ,x,0,1)
+                    #Show the display
+                    matrix.show()
+                    #Set the Scrolling speed. Here it is 50mS.
+                    utime.sleep(0.05)
 
             try:
-                #gyro = mpu.read_gyro_data()
+                gyro = mpu.read_gyro_data()
                 accel = mpu.read_accel_data()
+                print(accel, gyro)
 
                 keypress = ""
                 # Scan Keys
@@ -330,16 +362,19 @@ async def main():
                     row_pins[row].low()
                 if  keypress == "*":
                     course = ""
-                elif  keypress == "A":
+                elif  keypress == "A" or remotekey == "up":
                     level.up()
-                elif  keypress == "B":
+                    remotekey = ""
+                elif  keypress == "B" or remotekey == "down":
                     level.down()
-                elif  keypress == "#":
+                    remotekey = ""
+                elif  keypress == "#" or remotekey == "reset":
                     level.reset()
                     start = utime.time()
                     started = True
                     m=5
                     s=0
+                    remotekey = ""
                 else:
                     course += keypress
                 if started == True and m <= 0 and s <=0:
@@ -351,6 +386,8 @@ async def main():
                 if dt > checkin:
                     utime.sleep(.1)
                     lastupdate = now
+                
+                
             except Exception as e:
                 # Put something to output to OLED screen
                 beanaproblem('error.')
