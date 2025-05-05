@@ -1,1 +1,1 @@
-# SailIT
+# Sail IT
